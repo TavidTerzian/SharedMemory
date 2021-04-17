@@ -14,14 +14,21 @@
 int main()
 {
     int running = 1;
-    void *shared_memory = (void *)0;
-    struct shared_use_st *shared_stuff;
-    int shmid;
+    void *shared_memory = (void *)0; // var that represents the shared memory segment
+    struct shared_use_st *shared_stuff; // c shared memory segment struct
+    int shmid; // var that will store id of shared memory segment
 
-    srand((unsigned int)getpid());    
+    srand((unsigned int)getpid());    // generates a random number based on process id
 
-    shmid = shmget((key_t)1234, sizeof(struct shared_use_st), 0666 | IPC_CREAT);
-
+    /* 
+     * @name shmid 
+     * @param (key_t)1234 - assigns key, key_t 1234, to the returned shared memory segment
+     * @param sizeof(sturct shared_use_st) - size of the returned shared memory segment
+     * @param 0666 | IPC_CREAT - specifies that memory segment will be used as a server
+    */
+    shmid = shmget((key_t)1234, sizeof(struct shared_use_st), 0666 | IPC_CREAT); 
+    
+    // shmid error handling
     if (shmid == -1) {
         fprintf(stderr, "shmget failed\n");
         exit(EXIT_FAILURE);
@@ -29,12 +36,16 @@ int main()
 
 /* We now make the shared memory accessible to the program. */
 
+    // shmat - attaches shared memory segment
     shared_memory = shmat(shmid, (void *)0, 0);
+    
+    // shmat error handling
     if (shared_memory == (void *)-1) {
         fprintf(stderr, "shmat failed\n");
         exit(EXIT_FAILURE);
     }
-
+    
+    // print to read program that memory has been attached 
     printf("Memory attached at %X\n", (int)shared_memory);
 
 /* The next portion of the program assigns the shared_memory segment to shared_stuff,
@@ -42,14 +53,24 @@ int main()
  in written_by_you. The call to sleep forces the consumer to sit in its critical section,
  which makes the producer wait. */
 
-    shared_stuff = (struct shared_use_st *)shared_memory;
-    shared_stuff->written_by_you = 0;
+    shared_stuff = (struct shared_use_st *)shared_memory; // assign shared memory segment struct to memory segment var
+    shared_stuff->written_by_you = 0; // init written_by_you to 0 bc nothing has been written yet
+    
+    // program will keep running until the program reads "end" from shared_stuff shared memory segment
     while(running) {
+        
         if (shared_stuff->written_by_you) {
-            printf("You wrote: %s", shared_stuff->some_text);
+            
+            // print out the buffer which contains the system info
+            int n_printf = printf("You wrote: \n%s", shared_stuff->some_text);
+            
             sleep( rand() % 4 ); /* make the other process wait for us ! */
             shared_stuff->written_by_you = 0;
-            if (strncmp(shared_stuff->some_text, "end", 3) == 0) {
+            
+            if(n_printf > 0){
+                // setting written_by_you = 2 signifies to the other process that the session should be stopped
+                shared_stuff->written_by_you = 2;
+                printf("IPC Session has ended\n");
                 running = 0;
             }
         }
